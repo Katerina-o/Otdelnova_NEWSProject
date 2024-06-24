@@ -1,0 +1,52 @@
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
+from time import sleep
+import logging
+
+# Настройка логгера
+logging.basicConfig(filename='news_scraper.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+url = 'https://realty.ria.ru/lenta/'
+tags = ['Федеральная служба государственной регистрации, кадастра и картографии (Росреестр)', 'Москва', 'Строительство',
+        'Жилье', 'Недвижимость']
+
+last_date = datetime.now()
+cancel_date = datetime.now() + timedelta(hours=4)
+
+while datetime.now() < cancel_date:
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'lxml')
+        header = soup.find_all('a', class_='list-item__title color-font-hover-only')
+        news_date = soup.find_all('div', class_='list-item__date')
+        tags_elem = soup.find_all('div', class_='list-item__tags-list')
+
+        for i in range(len(header)):
+            # Обработка даты с учетом времени "Вчера"
+            date_text = news_date[i].text
+            if 'Вчера' in date_text:
+                date_text = (datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y ') + date_text.split(',')[1]
+            else:
+                date_text = datetime.today().strftime('%d.%m.%Y ') + date_text
+
+            news_datetime = datetime.strptime(date_text.strip(), '%d.%m.%Y %H:%M')
+
+            # Прерывание цикла, если новость старее последней записанной даты
+            if news_datetime <= last_date:
+                break
+
+            last_date = news_datetime
+            tags_category = tags_elem[i].find_all('span', class_='list-tag__text')
+            for tag_category in tags_category:
+                if tag_category.text in tags:
+                    logging.info(f'{news_date[i].text} - {header[i].text}')
+                    logging.info(f'Tags: {tag_category.text}')
+                    break
+
+    except Exception as e:
+        logging.error(f'An error occurred: {e}')
+    finally:
+        sleep(600)
+
+logging.info('Script finished.')
